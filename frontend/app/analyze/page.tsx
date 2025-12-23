@@ -25,14 +25,14 @@ function Badge({
 }) {
   const toneCls =
     tone === "good"
-      ? "bg-emerald-500/10 text-emerald-300 ring-emerald-500/20"
+      ? "bg-emerald-500/10 text-emerald-700 ring-emerald-500/20"
       : tone === "warn"
-      ? "bg-amber-500/10 text-amber-200 ring-amber-500/20"
+      ? "bg-amber-500/10 text-amber-800 ring-amber-500/20"
       : tone === "bad"
-      ? "bg-rose-500/10 text-rose-200 ring-rose-500/20"
+      ? "bg-rose-500/10 text-rose-800 ring-rose-500/20"
       : tone === "info"
-      ? "bg-sky-500/10 text-sky-200 ring-sky-500/20"
-      : "bg-white/5 text-white/80 ring-white/10";
+      ? "bg-sky-500/10 text-sky-800 ring-sky-500/20"
+      : "bg-black/5 text-black/70 ring-black/10";
 
   return (
     <span
@@ -46,26 +46,9 @@ function Badge({
   );
 }
 
-function Progress({ value }: { value: number }) {
-  const v = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
-  const tone =
-    v >= 80
-      ? "bg-emerald-400"
-      : v >= 60
-      ? "bg-sky-400"
-      : v >= 40
-      ? "bg-amber-400"
-      : "bg-rose-400";
-  return (
-    <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
-      <div className={classNames("h-full rounded-full", tone)} style={{ width: `${v}%` }} />
-    </div>
-  );
-}
-
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_30px_80px_rgba(0,0,0,0.5)]">
+    <div className="rounded-2xl border border-black/10 bg-white shadow-[0_1px_0_rgba(0,0,0,0.03),0_20px_60px_rgba(0,0,0,0.08)]">
       {children}
     </div>
   );
@@ -81,10 +64,10 @@ function CardHeader({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 p-5 border-b border-white/10">
+    <div className="flex items-start justify-between gap-3 p-5 border-b border-black/10">
       <div>
-        <div className="text-white text-base font-semibold">{title}</div>
-        {subtitle ? <div className="text-white/60 text-sm mt-1">{subtitle}</div> : null}
+        <div className="text-black text-base font-semibold">{title}</div>
+        {subtitle ? <div className="text-black/60 text-sm mt-1">{subtitle}</div> : null}
       </div>
       {right ? <div className="shrink-0">{right}</div> : null}
     </div>
@@ -95,8 +78,27 @@ function CardBody({ children }: { children: React.ReactNode }) {
   return <div className="p-5">{children}</div>;
 }
 
-function SkeletonLine({ w = "w-full" }: { w?: string }) {
-  return <div className={classNames("h-3 rounded bg-white/10 animate-pulse", w)} />;
+function Progress({ value }: { value: number }) {
+  const v = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+  return (
+    <div className="h-2 w-full rounded-full bg-black/10 overflow-hidden">
+      <div
+        className="h-full rounded-full"
+        style={{
+          width: `${v}%`,
+          background: "var(--accent)",
+        }}
+      />
+    </div>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-black/5 text-black/70 ring-1 ring-black/10">
+      {children}
+    </span>
+  );
 }
 
 export default function AnalyzePage() {
@@ -113,12 +115,26 @@ export default function AnalyzePage() {
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [tab, setTab] = useState<"overview" | "evidence" | "interview" | "json">("overview");
 
+  const [debug, setDebug] = useState(false);
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      setDebug(q.get("debug") === "1");
+    } catch {
+      setDebug(false);
+    }
+  }, []);
+
+  // Accent system (Recruiter = Blue, Candidate/Sandra = Teal/Green)
+  const accent = role === "recruiter" ? "#2563EB" : "#10B981";
+  const accentSoft = role === "recruiter" ? "rgba(37,99,235,0.10)" : "rgba(16,185,129,0.10)";
+
   const score = useMemo(() => {
     const p = result?.match_score?.percentage;
-    return typeof p === "number" ? p : null;
+    return typeof p === "number" ? p : typeof result?.match_score_simple === "number" ? result.match_score_simple : null;
   }, [result]);
 
-  const scoreLabel = result?.match_score?.label ?? "";
+  const scoreLabel = result?.match_score?.label ?? result?.risk_level ?? "";
   const verdict = result?.executive_summary?.one_line_verdict ?? result?.verdict ?? "";
   const brutal = result?.match_score?.brutal_honesty ?? "";
 
@@ -158,9 +174,8 @@ export default function AnalyzePage() {
     setRawText("");
 
     try {
-      // ✅ ALIGNMENT WITH NEW BACKEND (main.py)
       const payload = {
-        role, // optional in backend, but sending is fine
+        role,
         job_description: jobDescription,
         cv_text: cvText,
         recruiter_doubt: role === "recruiter" ? recruiterDoubt : "",
@@ -197,40 +212,64 @@ export default function AnalyzePage() {
     navigator.clipboard?.writeText(text).catch(() => {});
   }
 
-  const toneFromScore = (p: number | null) => {
-    if (p === null) return "neutral" as const;
-    if (p >= 80) return "good" as const;
-    if (p >= 60) return "info" as const;
-    if (p >= 40) return "warn" as const;
-    return "bad" as const;
-  };
-
   const canRun = !!api && cvText.trim().length > 0 && jobDescription.trim().length > 0 && !loading;
 
+  const tabs = debug ? (["overview", "evidence", "interview", "json"] as const) : (["overview", "evidence", "interview"] as const);
+
+  // Candidate-friendly interview presentation
+  const interviewQuestions: string[] = result?.interview_plan?.top_7_questions ?? [];
+  const redFlags: string[] = result?.interview_plan?.red_flags_to_verify ?? [];
+  const workSample: string = result?.interview_plan?.work_sample_test ?? "";
+
+  const candidatePrepTitle = "Interview prep (for you)";
+  const recruiterInterviewTitle = "Interview plan (for recruiter)";
+
   return (
-    <main className="min-h-screen bg-[#070A12] text-white">
+    <main
+      className="min-h-screen"
+      style={{
+        background: "linear-gradient(180deg, #F6F7FB 0%, #EEF1F7 100%)",
+        color: "#0B0F19",
+        // CSS vars for accent use
+        ["--accent" as any]: accent,
+        ["--accent-soft" as any]: accentSoft,
+      }}
+    >
       {/* Top bar */}
-      <div className="sticky top-0 z-20 border-b border-white/10 bg-[#070A12]/80 backdrop-blur">
+      <div className="sticky top-0 z-20 border-b border-black/10 bg-white/70 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-white/10 ring-1 ring-white/10 flex items-center justify-center font-semibold">
+            <div
+              className="h-9 w-9 rounded-xl ring-1 ring-black/10 flex items-center justify-center font-semibold text-white"
+              style={{ background: "var(--accent)" }}
+              aria-label="Kandrai"
+            >
               K
             </div>
             <div>
               <div className="font-semibold leading-tight">Kandrai</div>
-              <div className="text-xs text-white/60 leading-tight">Recruitment Intelligence</div>
+              <div className="text-xs text-black/60 leading-tight">
+                {role === "recruiter" ? "Recruitment Intelligence" : "Candidate Intelligence"}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge tone={health?.ok ? "good" : health?.error ? "bad" : "neutral"}>
-              {health?.ok ? `API OK ${health?.marker ? `(${health.marker})` : ""}` : health?.error ? "API ERROR" : "API…"}
-            </Badge>
-            <Badge tone="neutral">
-              <span className="text-white/60 mr-2">API</span>
-              <span className="font-mono text-[11px]">{api || "MISSING"}</span>
-            </Badge>
-          </div>
+          {/* Debug-only system info */}
+          {debug ? (
+            <div className="flex items-center gap-2">
+              <Badge tone={health?.ok ? "good" : health?.error ? "bad" : "neutral"}>
+                {health?.ok ? `API OK ${health?.marker ? `(${health.marker})` : ""}` : health?.error ? "API ERROR" : "API…"}
+              </Badge>
+              <Badge tone="neutral">
+                <span className="text-black/60 mr-2">API</span>
+                <span className="font-mono text-[11px]">{api || "MISSING"}</span>
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Pill>{role === "recruiter" ? "Recruiter mode" : "Candidate mode"}</Pill>
+            </div>
+          )}
         </div>
       </div>
 
@@ -238,19 +277,30 @@ export default function AnalyzePage() {
       <div className="mx-auto max-w-6xl px-4 pt-10 pb-6">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="info">Explainable AI</Badge>
-            <Badge tone="neutral">Structured output</Badge>
+            <Badge tone="neutral">Explainable AI</Badge>
+            <Badge tone="neutral">Evidence-backed</Badge>
             <Badge tone="neutral">Decision trace</Badge>
-            <Badge tone="neutral">Interview plan</Badge>
+            <Badge tone="neutral">{role === "recruiter" ? "Hiring clarity" : "Interview preparation"}</Badge>
           </div>
 
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-            Explainable CV ↔ JD intelligence, <span className="text-white/70">built for decision speed</span>
+          <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">
+            {role === "recruiter" ? (
+              <>
+                Hire with confidence.{" "}
+                <span style={{ color: "var(--accent)" }}>Not gut feeling.</span>
+              </>
+            ) : (
+              <>
+                Prepare smarter.{" "}
+                <span style={{ color: "var(--accent)" }}>Walk into interviews ready.</span>
+              </>
+            )}
           </h1>
 
-          <p className="text-white/60 max-w-3xl">
-            Paste a CV and a Job Description. Get a structured verdict, evidence, gaps, interview plan and decision trace —
-            ready for SaaS UI.
+          <p className="text-black/60 max-w-3xl text-base md:text-lg">
+            {role === "recruiter"
+              ? "Paste a CV and Job Description. Get a clear verdict, evidence, gaps and an interview plan — designed for real hiring decisions."
+              : "Paste your CV and the Job Description. Get clear strengths, gaps, and what recruiters will likely ask — so you can improve fast."}
           </p>
         </div>
       </div>
@@ -261,21 +311,14 @@ export default function AnalyzePage() {
         <Card>
           <CardHeader
             title="Inputs"
-            subtitle="CV + Job Description. Choose a role and run analysis."
+            subtitle={role === "recruiter" ? "CV + JD. Run analysis for hiring signals." : "CV + JD. Run analysis to prepare and improve."}
             right={
               <div className="flex items-center gap-2">
-                <Badge tone="neutral">{role === "recruiter" ? "Recruiter mode" : "Candidate mode"}</Badge>
-              </div>
-            }
-          />
-          <CardBody>
-            <div className="grid gap-4">
-              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setRole("recruiter")}
                   className={classNames(
-                    "px-3 py-2 rounded-xl border text-sm",
-                    role === "recruiter" ? "border-white/20 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
+                    "px-3 py-2 rounded-xl border text-sm transition",
+                    role === "recruiter" ? "border-black/15 bg-black/5" : "border-black/10 bg-white hover:bg-black/5"
                   )}
                 >
                   Recruiter
@@ -283,80 +326,110 @@ export default function AnalyzePage() {
                 <button
                   onClick={() => setRole("candidate")}
                   className={classNames(
-                    "px-3 py-2 rounded-xl border text-sm",
-                    role === "candidate" ? "border-white/20 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
+                    "px-3 py-2 rounded-xl border text-sm transition",
+                    role === "candidate" ? "border-black/15 bg-black/5" : "border-black/10 bg-white hover:bg-black/5"
                   )}
                 >
                   Candidate
                 </button>
+              </div>
+            }
+          />
+          <CardBody>
+            <div className="grid gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    setCvText("");
+                    setJobDescription("");
+                    setRecruiterDoubt("");
+                    setResult(null);
+                    setRawText("");
+                    setTab("overview");
+                  }}
+                  className="px-3 py-2 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-sm transition"
+                >
+                  Clear
+                </button>
+
+                <button
+                  disabled={!canRun}
+                  onClick={runAnalyze}
+                  className={classNames(
+                    "px-4 py-2 rounded-xl text-sm font-medium border transition shadow-sm",
+                    !canRun ? "border-black/10 bg-black/5 text-black/40 cursor-not-allowed" : "border-black/10 text-white"
+                  )}
+                  style={!canRun ? undefined : { background: "var(--accent)" }}
+                >
+                  {loading ? "Running…" : role === "recruiter" ? "Run analysis" : "Get my prep"}
+                </button>
 
                 <div className="ml-auto flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      setCvText("");
-                      setJobDescription("");
-                      setRecruiterDoubt("");
-                      setResult(null);
-                      setRawText("");
-                      setTab("overview");
-                    }}
-                    className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm"
+                    disabled={!result}
+                    onClick={() => alert("PDF export is a paid feature. (We’ll wire Stripe/paywall next.)")}
+                    className={classNames(
+                      "px-3 py-2 rounded-xl border text-sm transition",
+                      !result ? "border-black/10 bg-black/5 text-black/40 cursor-not-allowed" : "border-black/10 bg-white hover:bg-black/5"
+                    )}
+                    title="Paid feature"
                   >
-                    Clear
+                    Export PDF
                   </button>
 
-                  <button
-                    disabled={!canRun}
-                    onClick={runAnalyze}
-                    className={classNames(
-                      "px-4 py-2 rounded-xl text-sm font-medium border transition",
-                      !canRun
-                        ? "border-white/10 bg-white/5 text-white/40 cursor-not-allowed"
-                        : "border-white/20 bg-white text-black hover:bg-white/90"
-                    )}
-                  >
-                    {loading ? "Running…" : "Run Analyze"}
-                  </button>
+                  {/* Debug-only JSON copy */}
+                  {debug ? (
+                    <button
+                      onClick={() => copy(rawText || JSON.stringify(result ?? {}, null, 2))}
+                      className="px-3 py-2 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-sm transition"
+                    >
+                      Copy JSON
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
               <div className="grid gap-3">
-                <label className="text-sm text-white/70">Candidate / CV Text</label>
+                <label className="text-sm text-black/70">CV Text</label>
                 <textarea
                   value={cvText}
                   onChange={(e) => setCvText(e.target.value)}
                   rows={10}
-                  placeholder="Paste candidate CV here..."
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-white/20"
+                  placeholder="Paste the CV here…"
+                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:ring-2"
+                  style={{ boxShadow: "0 0 0 0 rgba(0,0,0,0)", borderColor: "rgba(0,0,0,0.10)" }}
                 />
               </div>
 
               <div className="grid gap-3">
-                <label className="text-sm text-white/70">Job Description</label>
+                <label className="text-sm text-black/70">Job Description</label>
                 <textarea
                   value={jobDescription}
                   onChange={(e) => setJobDescription(e.target.value)}
                   rows={10}
-                  placeholder="Paste job description here..."
-                  className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-white/20"
+                  placeholder="Paste the Job Description here…"
+                  className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:ring-2"
                 />
               </div>
 
               {role === "recruiter" ? (
                 <div className="grid gap-3">
-                  <label className="text-sm text-white/70">Recruiter doubt (optional)</label>
+                  <label className="text-sm text-black/70">Recruiter doubt (optional)</label>
                   <input
                     value={recruiterDoubt}
                     onChange={(e) => setRecruiterDoubt(e.target.value)}
-                    placeholder="e.g. Worried about job hopping / English level / reliability..."
-                    className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-white/20"
+                    placeholder="e.g. Reliability, English level, job hopping…"
+                    className="w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:ring-2"
                   />
                 </div>
               ) : null}
 
-              <div className="text-xs text-white/50">
-                Backend fields: <span className="font-mono">role, job_description, cv_text, recruiter_doubt</span>
-              </div>
+              {/* Debug-only backend fields hint */}
+              {debug ? (
+                <div className="text-xs text-black/50">
+                  Backend fields: <span className="font-mono">role, job_description, cv_text, recruiter_doubt</span>
+                </div>
+              ) : null}
             </div>
           </CardBody>
         </Card>
@@ -364,121 +437,120 @@ export default function AnalyzePage() {
         {/* Output */}
         <Card>
           <CardHeader
-            title="Output"
-            subtitle="Verdict, evidence, gaps and interview plan. UI-ready."
+            title="Results"
+            subtitle={role === "recruiter" ? "Verdict, evidence, gaps and interview plan." : "Your strengths, gaps and interview preparation."}
             right={
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => copy(rawText || JSON.stringify(result ?? {}, null, 2))}
-                  className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm"
-                >
-                  Copy JSON
-                </button>
-              </div>
+              score !== null ? (
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    {score}%
+                  </span>
+                  {scoreLabel ? <Badge tone="neutral">{scoreLabel}</Badge> : null}
+                </div>
+              ) : null
             }
           />
           <CardBody>
             {!result ? (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                <div className="text-white/70 text-sm">Run an analysis to see results here.</div>
-                <div className="text-white/40 text-xs mt-2">
-                  Health check: {health?.ok ? "OK" : health?.error ? health.error : "…"}
+              <div className="rounded-2xl border border-black/10 bg-white p-5">
+                <div className="text-black/70 text-sm">
+                  {role === "recruiter"
+                    ? "Run an analysis to see hiring signals here."
+                    : "Run an analysis to get your interview prep here."}
+                </div>
+                <div className="text-black/40 text-xs mt-2">
+                  {debug ? `Health: ${health?.ok ? "OK" : health?.error ? health.error : "…"}` : "Tip: use realistic CV + JD for best results."}
                 </div>
               </div>
             ) : (
               <>
                 {/* Tabs */}
                 <div className="flex flex-wrap items-center gap-2 mb-4">
-                  {(["overview", "evidence", "interview", "json"] as const).map((t) => (
+                  {tabs.map((t) => (
                     <button
                       key={t}
                       onClick={() => setTab(t)}
                       className={classNames(
-                        "px-3 py-2 rounded-xl border text-sm capitalize",
-                        tab === t ? "border-white/20 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
+                        "px-3 py-2 rounded-xl border text-sm capitalize transition",
+                        tab === t ? "border-black/15 bg-black/5" : "border-black/10 bg-white hover:bg-black/5"
                       )}
                     >
                       {t}
                     </button>
                   ))}
-                  {score !== null ? (
-                    <div className="ml-auto flex items-center gap-2">
-                      <Badge tone={toneFromScore(score)}>{score}%</Badge>
-                      {scoreLabel ? <Badge tone="neutral">{scoreLabel}</Badge> : null}
-                    </div>
-                  ) : null}
-                </div>
 
-                {/* Loading skeleton inside output when running */}
-                {loading ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="grow">
-                        <SkeletonLine w="w-40" />
-                        <div className="mt-3 space-y-2">
-                          <SkeletonLine />
-                          <SkeletonLine w="w-5/6" />
-                        </div>
-                      </div>
-                      <div className="w-40">
-                        <SkeletonLine w="w-24" />
-                        <div className="mt-3 h-2 rounded bg-white/10 animate-pulse" />
-                      </div>
-                    </div>
+                  <div className="ml-auto flex items-center gap-2">
+                    <Badge tone="neutral">{role === "recruiter" ? "Hiring view" : "Candidate view"}</Badge>
                   </div>
-                ) : null}
+                </div>
 
                 {/* Overview */}
                 {tab === "overview" ? (
                   <div className="grid gap-4">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                    <div className="rounded-2xl border border-black/10 bg-white p-5">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <div className="text-xs text-white/50">Executive verdict</div>
-                          <div className="text-white text-base font-semibold mt-1">{verdict || "—"}</div>
+                          <div className="text-xs text-black/50">
+                            {role === "recruiter" ? "Executive verdict" : "Your summary"}
+                          </div>
+                          <div className="text-black text-base font-semibold mt-1">{verdict || "—"}</div>
                         </div>
-                        <div className="w-40">
-                          <div className="text-xs text-white/50 mb-2">Match score</div>
+                        <div className="w-44">
+                          <div className="text-xs text-black/50 mb-2">Match score</div>
                           <Progress value={score ?? 0} />
                         </div>
                       </div>
 
                       {brutal ? (
-                        <div className="mt-4 text-sm text-white/70">
-                          <span className="text-white/50">Brutal honesty:</span> {brutal}
+                        <div className="mt-4 text-sm text-black/70">
+                          <span className="text-black/50">{role === "recruiter" ? "Brutal honesty:" : "What could block you:"}</span>{" "}
+                          {brutal}
                         </div>
                       ) : null}
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-xs text-white/50">Hire now vs later</div>
-                        <div className="text-white mt-1">{result?.executive_summary?.hire_now_vs_later ?? "—"}</div>
+                      <div className="rounded-2xl border border-black/10 bg-white p-5">
+                        <div className="text-xs text-black/50">{role === "recruiter" ? "Hire now vs later" : "Timing"}</div>
+                        <div className="text-black mt-1">{result?.executive_summary?.hire_now_vs_later ?? "—"}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-xs text-white/50">Replacement cost risk</div>
-                        <div className="text-white mt-1">{result?.executive_summary?.replacement_cost_risk ?? "—"}</div>
+                      <div className="rounded-2xl border border-black/10 bg-white p-5">
+                        <div className="text-xs text-black/50">{role === "recruiter" ? "Replacement cost risk" : "Risk level"}</div>
+                        <div className="text-black mt-1">{result?.executive_summary?.replacement_cost_risk ?? scoreLabel || "—"}</div>
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                      <div className="text-xs text-white/50">Executive action</div>
-                      <div className="text-white mt-1">{result?.executive_summary?.executive_action ?? "—"}</div>
+                    <div className="rounded-2xl border border-black/10 bg-white p-5">
+                      <div className="text-xs text-black/50">{role === "recruiter" ? "Executive action" : "Next best action"}</div>
+                      <div className="text-black mt-1">
+                        {role === "recruiter"
+                          ? result?.executive_summary?.executive_action ?? "—"
+                          : (result?.decision_trace?.what_would_raise_score_fast?.[0] ?? result?.executive_summary?.executive_action ?? "—")}
+                      </div>
                     </div>
 
                     {/* Skills gap */}
                     {result?.skills_gap ? (
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-sm font-semibold mb-3">Skills gap</div>
+                      <div className="rounded-2xl border border-black/10 bg-white p-5">
+                        <div className="text-sm font-semibold mb-3">
+                          {role === "recruiter" ? "Skills gap" : "What to improve"}
+                        </div>
                         <div className="grid md:grid-cols-2 gap-4">
                           <div>
-                            <div className="text-xs text-white/50 mb-2">Missing hard skills</div>
+                            <div className="text-xs text-black/50 mb-2">Missing hard skills</div>
                             <div className="flex flex-wrap gap-2">
                               {(result.skills_gap.missing_hard_skills ?? []).length ? (
                                 result.skills_gap.missing_hard_skills.map((x: string, i: number) => (
-                                  <Badge key={i} tone="warn">
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1"
+                                    style={{ background: "rgba(245,158,11,0.12)", color: "#92400E", borderColor: "rgba(245,158,11,0.20)" }}
+                                  >
                                     {x}
-                                  </Badge>
+                                  </span>
                                 ))
                               ) : (
                                 <Badge tone="good">None detected</Badge>
@@ -486,13 +558,17 @@ export default function AnalyzePage() {
                             </div>
                           </div>
                           <div>
-                            <div className="text-xs text-white/50 mb-2">Missing soft skills</div>
+                            <div className="text-xs text-black/50 mb-2">Missing soft skills</div>
                             <div className="flex flex-wrap gap-2">
                               {(result.skills_gap.missing_soft_skills ?? []).length ? (
                                 result.skills_gap.missing_soft_skills.map((x: string, i: number) => (
-                                  <Badge key={i} tone="warn">
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1"
+                                    style={{ background: "rgba(245,158,11,0.12)", color: "#92400E", borderColor: "rgba(245,158,11,0.20)" }}
+                                  >
                                     {x}
-                                  </Badge>
+                                  </span>
                                 ))
                               ) : (
                                 <Badge tone="good">None detected</Badge>
@@ -508,37 +584,37 @@ export default function AnalyzePage() {
                 {/* Evidence */}
                 {tab === "evidence" ? (
                   <div className="grid gap-4">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                      <div className="text-sm font-semibold mb-3">Evidence</div>
+                    <div className="rounded-2xl border border-black/10 bg-white p-5">
+                      <div className="text-sm font-semibold mb-3">{role === "recruiter" ? "Evidence" : "What the system sees"}</div>
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <div className="text-xs text-white/50 mb-2">CV signals</div>
-                          <ul className="space-y-2 text-sm text-white/80">
+                          <div className="text-xs text-black/50 mb-2">CV signals</div>
+                          <ul className="space-y-2 text-sm text-black/80">
                             {(result?.evidence?.cv_signals ?? []).map((x: string, i: number) => (
                               <li key={i} className="flex gap-2">
-                                <span className="text-white/30">•</span>
+                                <span className="text-black/30">•</span>
                                 <span>{x}</span>
                               </li>
                             ))}
-                            {!((result?.evidence?.cv_signals ?? []).length) ? <li className="text-white/40">—</li> : null}
+                            {!((result?.evidence?.cv_signals ?? []).length) ? <li className="text-black/40">—</li> : null}
                           </ul>
                         </div>
                         <div>
-                          <div className="text-xs text-white/50 mb-2">JD signals</div>
-                          <ul className="space-y-2 text-sm text-white/80">
+                          <div className="text-xs text-black/50 mb-2">JD signals</div>
+                          <ul className="space-y-2 text-sm text-black/80">
                             {(result?.evidence?.jd_signals ?? []).map((x: string, i: number) => (
                               <li key={i} className="flex gap-2">
-                                <span className="text-white/30">•</span>
+                                <span className="text-black/30">•</span>
                                 <span>{x}</span>
                               </li>
                             ))}
-                            {!((result?.evidence?.jd_signals ?? []).length) ? <li className="text-white/40">—</li> : null}
+                            {!((result?.evidence?.jd_signals ?? []).length) ? <li className="text-black/40">—</li> : null}
                           </ul>
                         </div>
                       </div>
 
                       <div className="mt-5">
-                        <div className="text-xs text-white/50 mb-2">Key mismatches</div>
+                        <div className="text-xs text-black/50 mb-2">{role === "recruiter" ? "Key mismatches" : "Your biggest gaps"}</div>
                         <div className="flex flex-wrap gap-2">
                           {(result?.evidence?.key_mismatches ?? []).map((x: string, i: number) => (
                             <Badge key={i} tone="bad">
@@ -551,31 +627,29 @@ export default function AnalyzePage() {
                     </div>
 
                     {result?.decision_trace ? (
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-sm font-semibold mb-3">Decision trace</div>
+                      <div className="rounded-2xl border border-black/10 bg-white p-5">
+                        <div className="text-sm font-semibold mb-3">{role === "recruiter" ? "Decision trace" : "How to improve fast"}</div>
                         <div className="grid md:grid-cols-2 gap-4">
                           <div>
-                            <div className="text-xs text-white/50 mb-2">Why this score</div>
-                            <ul className="space-y-2 text-sm text-white/80">
+                            <div className="text-xs text-black/50 mb-2">{role === "recruiter" ? "Why this score" : "Why your score is this"}</div>
+                            <ul className="space-y-2 text-sm text-black/80">
                               {(result.decision_trace.why_this_score ?? []).map((x: string, i: number) => (
                                 <li key={i} className="flex gap-2">
-                                  <span className="text-white/30">•</span>
+                                  <span className="text-black/30">•</span>
                                   <span>{x}</span>
                                 </li>
                               ))}
-                              {!((result.decision_trace.why_this_score ?? []).length) ? <li className="text-white/40">—</li> : null}
                             </ul>
                           </div>
                           <div>
-                            <div className="text-xs text-white/50 mb-2">What raises score fast</div>
-                            <ul className="space-y-2 text-sm text-white/80">
+                            <div className="text-xs text-black/50 mb-2">What would raise score fast</div>
+                            <ul className="space-y-2 text-sm text-black/80">
                               {(result.decision_trace.what_would_raise_score_fast ?? []).map((x: string, i: number) => (
                                 <li key={i} className="flex gap-2">
-                                  <span className="text-white/30">•</span>
+                                  <span className="text-black/30">•</span>
                                   <span>{x}</span>
                                 </li>
                               ))}
-                              {!((result.decision_trace.what_would_raise_score_fast ?? []).length) ? <li className="text-white/40">—</li> : null}
                             </ul>
                           </div>
                         </div>
@@ -587,66 +661,87 @@ export default function AnalyzePage() {
                 {/* Interview */}
                 {tab === "interview" ? (
                   <div className="grid gap-4">
-                    <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                      <div className="text-sm font-semibold mb-3">Interview plan</div>
+                    <div className="rounded-2xl border border-black/10 bg-white p-5">
+                      <div className="text-sm font-semibold mb-3">
+                        {role === "recruiter" ? recruiterInterviewTitle : candidatePrepTitle}
+                      </div>
+
                       <div className="grid md:grid-cols-2 gap-4">
                         <div>
-                          <div className="text-xs text-white/50 mb-2">Top questions</div>
-                          <ul className="space-y-2 text-sm text-white/80">
-                            {(result?.interview_plan?.top_7_questions ?? []).map((x: string, i: number) => (
+                          <div className="text-xs text-black/50 mb-2">
+                            {role === "recruiter" ? "Top questions" : "Questions you will likely get"}
+                          </div>
+                          <ul className="space-y-2 text-sm text-black/80">
+                            {interviewQuestions.map((x: string, i: number) => (
                               <li key={i} className="flex gap-2">
-                                <span className="text-white/30">•</span>
+                                <span style={{ color: "var(--accent)" }}>•</span>
                                 <span>{x}</span>
                               </li>
                             ))}
-                            {!((result?.interview_plan?.top_7_questions ?? []).length) ? <li className="text-white/40">—</li> : null}
+                            {!interviewQuestions.length ? <li className="text-black/40">—</li> : null}
                           </ul>
                         </div>
+
                         <div>
-                          <div className="text-xs text-white/50 mb-2">Red flags to verify</div>
+                          <div className="text-xs text-black/50 mb-2">
+                            {role === "recruiter" ? "Red flags to verify" : "What could worry recruiters (prepare answers)"}
+                          </div>
                           <div className="flex flex-wrap gap-2">
-                            {(result?.interview_plan?.red_flags_to_verify ?? []).map((x: string, i: number) => (
-                              <Badge key={i} tone="warn">
+                            {redFlags.map((x: string, i: number) => (
+                              <Badge key={i} tone={role === "recruiter" ? "warn" : "info"}>
                                 {x}
                               </Badge>
                             ))}
-                            {!((result?.interview_plan?.red_flags_to_verify ?? []).length) ? <Badge tone="good">None</Badge> : null}
+                            {!redFlags.length ? <Badge tone="good">None</Badge> : null}
                           </div>
 
                           <div className="mt-4">
-                            <div className="text-xs text-white/50 mb-2">Work sample test</div>
-                            <div className="text-sm text-white/80">{result?.interview_plan?.work_sample_test ?? "—"}</div>
+                            <div className="text-xs text-black/50 mb-2">
+                              {role === "recruiter" ? "Work sample test" : "What they may ask you to do"}
+                            </div>
+                            <div className="text-sm text-black/80">{workSample || "—"}</div>
                           </div>
+
+                          {role === "candidate" ? (
+                            <div className="mt-4 rounded-xl border border-black/10 p-4 bg-black/5">
+                              <div className="text-xs font-semibold mb-1" style={{ color: "var(--accent)" }}>
+                                Quick prep tip
+                              </div>
+                              <div className="text-sm text-black/70">
+                                Use the “What would raise score fast” section to decide what to improve this week. Then rehearse answers for the red flags above.
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
 
-                    {result?.skills_gap?.upskilling_plan_7_days || result?.skills_gap?.upskilling_plan_30_days ? (
-                      <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-sm font-semibold mb-3">Upskilling plan</div>
+                    {(result?.skills_gap?.upskilling_plan_7_days || result?.skills_gap?.upskilling_plan_30_days) ? (
+                      <div className="rounded-2xl border border-black/10 bg-white p-5">
+                        <div className="text-sm font-semibold mb-3">{role === "recruiter" ? "Upskilling plan" : "Your improvement plan"}</div>
                         <div className="grid md:grid-cols-2 gap-4">
                           <div>
-                            <div className="text-xs text-white/50 mb-2">7 days</div>
-                            <ul className="space-y-2 text-sm text-white/80">
+                            <div className="text-xs text-black/50 mb-2">7 days</div>
+                            <ul className="space-y-2 text-sm text-black/80">
                               {(result.skills_gap.upskilling_plan_7_days ?? []).map((x: string, i: number) => (
                                 <li key={i} className="flex gap-2">
-                                  <span className="text-white/30">•</span>
+                                  <span style={{ color: "var(--accent)" }}>•</span>
                                   <span>{x}</span>
                                 </li>
                               ))}
-                              {!((result.skills_gap.upskilling_plan_7_days ?? []).length) ? <li className="text-white/40">—</li> : null}
+                              {!((result.skills_gap.upskilling_plan_7_days ?? []).length) ? <li className="text-black/40">—</li> : null}
                             </ul>
                           </div>
                           <div>
-                            <div className="text-xs text-white/50 mb-2">30 days</div>
-                            <ul className="space-y-2 text-sm text-white/80">
+                            <div className="text-xs text-black/50 mb-2">30 days</div>
+                            <ul className="space-y-2 text-sm text-black/80">
                               {(result.skills_gap.upskilling_plan_30_days ?? []).map((x: string, i: number) => (
                                 <li key={i} className="flex gap-2">
-                                  <span className="text-white/30">•</span>
+                                  <span style={{ color: "var(--accent)" }}>•</span>
                                   <span>{x}</span>
                                 </li>
                               ))}
-                              {!((result.skills_gap.upskilling_plan_30_days ?? []).length) ? <li className="text-white/40">—</li> : null}
+                              {!((result.skills_gap.upskilling_plan_30_days ?? []).length) ? <li className="text-black/40">—</li> : null}
                             </ul>
                           </div>
                         </div>
@@ -655,21 +750,19 @@ export default function AnalyzePage() {
                   </div>
                 ) : null}
 
-                {/* JSON */}
+                {/* JSON (debug-only) */}
                 {tab === "json" ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <div className="rounded-2xl border border-black/10 bg-white p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <div className="text-xs text-white/50">Raw response</div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => copy(rawText)}
-                          className="px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm"
-                        >
-                          Copy
-                        </button>
-                      </div>
+                      <div className="text-xs text-black/50">Raw response</div>
+                      <button
+                        onClick={() => copy(rawText)}
+                        className="px-3 py-2 rounded-xl border border-black/10 bg-white hover:bg-black/5 text-sm transition"
+                      >
+                        Copy
+                      </button>
                     </div>
-                    <pre className="text-xs text-white/80 whitespace-pre-wrap break-words leading-relaxed">
+                    <pre className="text-xs text-black/80 whitespace-pre-wrap break-words leading-relaxed">
                       {rawText ? rawText : JSON.stringify(result, null, 2)}
                     </pre>
                   </div>
@@ -679,7 +772,17 @@ export default function AnalyzePage() {
           </CardBody>
         </Card>
       </div>
+
+      {/* Footer subtle */}
+      <div className="pb-10">
+        <div className="mx-auto max-w-6xl px-4 text-xs text-black/40">
+          {debug ? (
+            <>Debug mode enabled. Add <span className="font-mono">?debug=1</span> to view API details & JSON.</>
+          ) : (
+            <>Kandrai • Explainable hiring signals & candidate preparation</>
+          )}
+        </div>
+      </div>
     </main>
   );
 }
-
