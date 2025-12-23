@@ -1,3 +1,5 @@
+"use client";
+
 export const dynamic = "force-dynamic";
 
 type AnalyzeResponse = any;
@@ -17,19 +19,14 @@ export default function AnalyzePage() {
     const outEl = document.getElementById("out") as HTMLPreElement | null;
     if (outEl) outEl.textContent = "Sending...";
 
-    if (!api) {
-      if (outEl) outEl.textContent = "ERROR: NEXT_PUBLIC_API_URL is missing in Vercel env vars.";
-      return;
-    }
-
     try {
       const res = await fetch(`${api}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Enviamos legacy format (backend lo convierte internamente)
         body: JSON.stringify({
-          cv_text: cvText,
-          jd_text: jdText,
+          role: "candidate",
+          job_description: jdText,
+          candidate_text: cvText,
         }),
       });
 
@@ -42,7 +39,7 @@ export default function AnalyzePage() {
       }
 
       if (!res.ok) {
-        if (outEl) outEl.textContent = JSON.stringify({ status: res.status, data }, null, 2);
+        if (outEl) outEl.textContent = JSON.stringify({ error: res.status, data }, null, 2);
         return;
       }
 
@@ -61,57 +58,21 @@ export default function AnalyzePage() {
       </p>
 
       <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>CV Text</span>
-          <textarea
-            name="cvText"
-            rows={10}
-            placeholder="Paste CV here..."
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            required
-          />
+        <label>
+          CV Text
+          <textarea name="cvText" rows={10} required />
         </label>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Job Description</span>
-          <textarea
-            name="jdText"
-            rows={10}
-            placeholder="Paste Job Description here..."
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            required
-          />
+        <label>
+          Job Description
+          <textarea name="jdText" rows={10} required />
         </label>
 
-        <button
-          type="submit"
-          style={{
-            padding: "10px 14px",
-            borderRadius: 10,
-            border: "1px solid #111",
-            background: "#111",
-            color: "white",
-            cursor: "pointer",
-            width: "fit-content",
-          }}
-        >
-          Run Analyze
-        </button>
+        <button type="submit">Run Analyze</button>
       </form>
 
-      <h3 style={{ marginTop: 18 }}>Result</h3>
-      <pre
-        id="out"
-        style={{
-          padding: 12,
-          border: "1px solid #ddd",
-          borderRadius: 8,
-          overflowX: "auto",
-          minHeight: 120,
-        }}
-      >
-        Ready.
-      </pre>
+      <h3>Result</h3>
+      <pre id="out">Ready.</pre>
     </main>
   );
 }
