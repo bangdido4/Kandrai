@@ -1,30 +1,41 @@
-export const dynamic = "force-dynamic";
+"use client";
+
+import React, { useMemo, useState } from "react";
 
 type AnalyzeResponse = any;
 
 export default function AnalyzePage() {
-  const api = process.env.NEXT_PUBLIC_API_URL ?? "";
+  // ✅ En cliente: la env var SÍ está disponible porque empieza por NEXT_PUBLIC_
+  const api = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "", []);
+
+  const [cvText, setCvText] = useState("");
+  const [jdText, setJdText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<string>("Ready.");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+    if (!api) {
+      setResult("ERROR: NEXT_PUBLIC_API_URL is missing in Vercel env vars.");
+      return;
+    }
 
-    const cvText = String(fd.get("cvText") || "");
-    const jdText = String(fd.get("jdText") || "");
-
-    const outEl = document.getElementById("out") as HTMLPreElement | null;
-    if (outEl) outEl.textContent = "Sending...";
+    setLoading(true);
+    setResult("Sending...");
 
     try {
       const res = await fetch(`${api}/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ⬇️ si tu backend usa otros nombres, dime tu schema y lo ajusto
+
+        // ✅ OJO: tu backend FastAPI (según tu main.py) espera estos nombres:
+        // role, job_description, candidate_text, recruiter_doubt
         body: JSON.stringify({
-          cv_text: cvText,
-          jd_text: jdText,
+          role: "candidate",
+          job_description: jdText,
+          candidate_text: cvText,
+          recruiter_doubt: "",
         }),
       });
 
@@ -37,13 +48,15 @@ export default function AnalyzePage() {
       }
 
       if (!res.ok) {
-        if (outEl) outEl.textContent = JSON.stringify({ error: res.status, data }, null, 2);
+        setResult(JSON.stringify({ error: res.status, data }, null, 2));
         return;
       }
 
-      if (outEl) outEl.textContent = JSON.stringify(data, null, 2);
+      setResult(JSON.stringify(data, null, 2));
     } catch (err: any) {
-      if (outEl) outEl.textContent = JSON.stringify({ error: String(err) }, null, 2);
+      setResult(JSON.stringify({ error: String(err) }, null, 2));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -59,7 +72,8 @@ export default function AnalyzePage() {
         <label style={{ display: "grid", gap: 6 }}>
           <span>CV Text</span>
           <textarea
-            name="cvText"
+            value={cvText}
+            onChange={(e) => setCvText(e.target.value)}
             rows={10}
             placeholder="Paste CV here..."
             style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
@@ -70,7 +84,8 @@ export default function AnalyzePage() {
         <label style={{ display: "grid", gap: 6 }}>
           <span>Job Description</span>
           <textarea
-            name="jdText"
+            value={jdText}
+            onChange={(e) => setJdText(e.target.value)}
             rows={10}
             placeholder="Paste Job Description here..."
             style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
@@ -80,32 +95,34 @@ export default function AnalyzePage() {
 
         <button
           type="submit"
+          disabled={loading}
           style={{
             padding: "10px 14px",
             borderRadius: 10,
             border: "1px solid #111",
             background: "#111",
             color: "white",
-            cursor: "pointer",
+            cursor: loading ? "not-allowed" : "pointer",
             width: "fit-content",
+            opacity: loading ? 0.7 : 1,
           }}
         >
-          Run Analyze
+          {loading ? "Running..." : "Run Analyze"}
         </button>
       </form>
 
       <h3 style={{ marginTop: 18 }}>Result</h3>
       <pre
-        id="out"
         style={{
           padding: 12,
           border: "1px solid #ddd",
           borderRadius: 8,
           overflowX: "auto",
           minHeight: 120,
+          whiteSpace: "pre-wrap",
         }}
       >
-        Ready.
+        {result}
       </pre>
     </main>
   );
