@@ -13,9 +13,13 @@ from openai import OpenAI
 
 app = FastAPI(title="Kandrai API", version="3.1.0-NEW")
 
+# ✅ CORS FIX (CRÍTICO)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://kandrai.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -73,7 +77,7 @@ OUTPUT MUST FOLLOW THIS STRUCTURE:
 Role = Literal["candidate", "recruiter"]
 
 class AnalyzeRequest(BaseModel):
-    role: Role
+    role: Role = "candidate"
     job_description: str
     candidate_text: str
     recruiter_doubt: Optional[str] = ""
