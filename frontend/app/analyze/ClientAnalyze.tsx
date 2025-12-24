@@ -195,7 +195,7 @@ async function extractTextFromTxt(file: File) {
   return await file.text();
 }
 async function extractTextFromDocx(file: File) {
-  const mammoth = await import("mammoth/mammoth.browser");
+  const mammoth = await import("mammoth");
   const arrayBuffer = await file.arrayBuffer();
   const res = await mammoth.extractRawText({ arrayBuffer });
   return (res?.value ?? "").trim();
