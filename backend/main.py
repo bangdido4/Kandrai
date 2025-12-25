@@ -1,11 +1,13 @@
 import os
+import io
 import json
 from typing import Optional, Literal
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
+from pypdf import PdfReader
 
 # =========================================================
 # FASTAPI APP
@@ -27,6 +29,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://kandrai.vercel.app",
+        # si tu dominio de vercel cambió, añade aquí el nuevo también
+        # "https://kandrai-ausupp9wf-44lafamys-projects.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -145,7 +149,6 @@ def health():
 
 @app.post("/analyze")
 def analyze(payload: AnalyzeRequest):
-
     user_content = f"""
 ROLE: {payload.role}
 
@@ -176,9 +179,40 @@ RECRUITER DOUBT:
     # DERIVED FIELDS FOR SAAS UI (DO NOT REMOVE)
     # =====================================================
 
-    raw["match_score_simple"] = raw["match_score"]["percentage"]
-    raw["risk_level"] = raw["match_score"]["label"]
-    raw["verdict"] = raw["executive_summary"]["one_line_verdict"]
-    raw["explanations"] = raw["decision_trace"]["why_this_score"]
+    raw["match_score_simple"] = raw.get("match_score", {}).get("percentage")
+    raw["risk_level"] = raw.get("match_score", {}).get("label")
+    raw["verdict"] = raw.get("executive_summary", {}).get("one_line_verdict")
+    raw["explanations"] = raw.get("decision_trace", {}).get("why_this_score", [])
 
     return raw
+
+@app.post("/extract")
+async def extract_text(file: UploadFile = File(...)):
+    """
+    Server-side text extraction.
+    - PDF: extracted here (safe for Vercel/Next)
+    - TXT: decoded here
+    - DOCX: handled in frontend (mammoth). Return 400 to force client parse.
+    """
+    try:
+        name = (file.filename or "").lower()
+        data = await file.read()
+
+        if name.endswith(".txt"):
+            return {"text": data.decode("utf-8", errors="ignore").strip()}
+
+        if name.endswith(".docx"):
+            raise HTTPException(status_code=400, detail="DOCX extraction handled on frontend. Upload PDF or paste text.")
+
+        if name.endswith(".pdf"):
+            reader = PdfReader(io.BytesIO(data))
+            out = []
+            for page in reader.pages:
+                out.append(page.extract_text() or "")
+            return {"text": "\n".join(out).strip()}
+
+        raise HTTPException(status_code=400, detail="Unsupported file. Use PDF/DOCX/TXT.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extract failed: {str(e)}")
