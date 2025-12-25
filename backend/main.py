@@ -36,12 +36,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # =========================================================
-# OPENAI CLIENT
+# OPENAI (LAZY INIT SAFE)
 # =========================================================
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+def get_openai_client() -> OpenAI:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY missing on server. Set it in Railway environment variables.",
+        )
+    return OpenAI(api_key=api_key)
 
 # =========================================================
 # SYSTEM PROMPT (LOCKED)
@@ -136,19 +142,23 @@ def root():
         "ok": True,
         "service": "Kandrai API",
         "version": "3.1.1",
-        "docs": "/docs"
+        "docs": "/docs",
     }
 
 @app.get("/health")
 def health():
+    # No fallar por OPENAI_API_KEY aquí, solo informar
     return {
         "ok": True,
         "engine": "kandrai",
-        "marker": "NEW-3.1.1"
+        "marker": "NEW-3.1.1",
+        "openai_key_present": bool(os.getenv("OPENAI_API_KEY")),
     }
 
 @app.post("/analyze")
 def analyze(payload: AnalyzeRequest):
+    client = get_openai_client()
+
     user_content = f"""
 ROLE: {payload.role}
 
@@ -162,27 +172,35 @@ RECRUITER DOUBT:
 {payload.recruiter_doubt}
 """.strip()
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": KANDRAI_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.2,
-        max_tokens=1400,
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": KANDRAI_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_tokens=1400,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"OpenAI request failed: {str(e)}")
 
-    raw = json.loads(response.choices[0].message.content)
+    try:
+        raw = json.loads(response.choices[0].message.content)
+    except Exception:
+        raise HTTPException(status_code=502, detail="OpenAI returned invalid JSON.")
 
     # =====================================================
     # DERIVED FIELDS FOR SAAS UI (DO NOT REMOVE)
     # =====================================================
 
-    raw["match_score_simple"] = raw.get("match_score", {}).get("percentage")
-    raw["risk_level"] = raw.get("match_score", {}).get("label")
-    raw["verdict"] = raw.get("executive_summary", {}).get("one_line_verdict")
-    raw["explanations"] = raw.get("decision_trace", {}).get("why_this_score", [])
+    raw["match_score_simple"] = (raw.get("match_score") or {}).get("percentage")
+    raw["risk_level"] = (raw.get("match_score") or {}).get("label")
+    raw["verdict"] = (raw.get("executive_summary") or {}).get("one_line_verdict")
+    raw["explanations"] = (raw.get("decision_trace") or {}).get("why_this_score", [])
 
     return raw
 
@@ -190,28 +208,44 @@ RECRUITER DOUBT:
 async def extract_text(file: UploadFile = File(...)):
     """
     Server-side text extraction.
-    - PDF: extracted here (safe for Vercel/Next)
+    - PDF: extracted here
     - TXT: decoded here
     - DOCX: handled in frontend (mammoth). Return 400 to force client parse.
     """
     try:
         name = (file.filename or "").lower()
+
+        if not (name.endswith(".pdf") or name.endswith(".docx") or name.endswith(".txt")):
+            raise HTTPException(status_code=400, detail="Unsupported file. Use PDF/DOCX/TXT.")
+
         data = await file.read()
 
+        # TXT
         if name.endswith(".txt"):
             return {"text": data.decode("utf-8", errors="ignore").strip()}
 
+        # DOCX (frontend)
         if name.endswith(".docx"):
             raise HTTPException(status_code=400, detail="DOCX extraction handled on frontend. Upload PDF or paste text.")
 
+        # PDF
         if name.endswith(".pdf"):
             reader = PdfReader(io.BytesIO(data))
             out = []
             for page in reader.pages:
                 out.append(page.extract_text() or "")
-            return {"text": "\n".join(out).strip()}
+            text = "\n".join(out).strip()
 
-        raise HTTPException(status_code=400, detail="Unsupported file. Use PDF/DOCX/TXT.")
+            # ✅ scanned PDF: no selectable text
+            if not text:
+                raise HTTPException(
+                    status_code=422,
+                    detail="No text found in this PDF (likely scanned). Upload DOCX/TXT or paste text.",
+                )
+
+            return {"text": text}
+
+        raise HTTPException(status_code=400, detail="No extractor matched.")
     except HTTPException:
         raise
     except Exception as e:
