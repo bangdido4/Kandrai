@@ -6,3 +6,4 @@ httpx==0.27.2
 
 pydantic==2.10.4
 python-dotenv==1.0.1pypdf==5.*
+python-multipart==0.0.9
