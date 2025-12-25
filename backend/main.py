@@ -29,13 +29,13 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://kandrai.vercel.app",
-        # si tu dominio de vercel cambió, añade aquí el nuevo también
-        # "https://kandrai-ausupp9wf-44lafamys-projects.vercel.app",
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # =========================================================
 # OPENAI CLIENT
