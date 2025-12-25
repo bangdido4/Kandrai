@@ -15,7 +15,15 @@ function safeJsonParse(text: string) {
   }
 }
 
-function Badge({ children, tone, isDark }: { children: React.ReactNode; tone?: "good" | "warn" | "bad" | "info" | "neutral"; isDark: boolean }) {
+function Badge({
+  children,
+  tone,
+  isDark,
+}: {
+  children: React.ReactNode;
+  tone?: "good" | "warn" | "bad" | "info" | "neutral";
+  isDark: boolean;
+}) {
   const t = tone ?? "neutral";
   const cls =
     t === "good"
@@ -30,7 +38,16 @@ function Badge({ children, tone, isDark }: { children: React.ReactNode; tone?: "
       ? "bg-white/6 text-white/70 ring-white/12"
       : "bg-black/[0.04] text-black/70 ring-black/10";
 
-  return <span className={classNames("inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 backdrop-blur", cls)}>{children}</span>;
+  return (
+    <span
+      className={classNames(
+        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 backdrop-blur",
+        cls
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 function Card({ children, isDark }: { children: React.ReactNode; isDark: boolean }) {
@@ -48,7 +65,17 @@ function Card({ children, isDark }: { children: React.ReactNode; isDark: boolean
   );
 }
 
-function CardHeader({ title, subtitle, right, isDark }: { title: string; subtitle?: string; right?: React.ReactNode; isDark: boolean }) {
+function CardHeader({
+  title,
+  subtitle,
+  right,
+  isDark,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  isDark: boolean;
+}) {
   return (
     <div className={classNames("flex items-start justify-between gap-3 p-6 border-b", isDark ? "border-white/10" : "border-black/10")}>
       <div className="min-w-0">
@@ -106,7 +133,9 @@ async function extractPdfViaBackend(apiBase: string, file: File) {
     throw new Error(String(msg));
   }
   const out = parsed.data?.text;
-  if (!out || typeof out !== "string") throw new Error("Extract endpoint returned no text.");
+  if (!out || typeof out !== "string" || out.trim().length === 0) {
+    throw new Error("No text found in this PDF (likely scanned). Upload DOCX/TXT or paste text.");
+  }
   return out.trim();
 }
 
@@ -286,10 +315,11 @@ export default function ClientAnalyze() {
     setRawText("");
 
     try {
+      // ✅ FIX: backend expects cv_text (NOT candidate_text)
       const payload = {
         role,
         job_description: jdText,
-        candidate_text: cvText,
+        cv_text: cvText,
         recruiter_doubt: role === "recruiter" ? doubt : "",
       };
 
@@ -304,7 +334,7 @@ export default function ClientAnalyze() {
       const parsed = safeJsonParse(text);
 
       if (!res.ok) {
-        setResult({ error: res.status, ...parsed.data });
+        setResult({ error: `HTTP ${res.status}`, detail: parsed.data?.detail ?? parsed.data?.error ?? parsed.data ?? text });
         setTab("overview");
         return;
       }
@@ -349,6 +379,9 @@ export default function ClientAnalyze() {
     return { t: "No-hire", tone: "bad" as const };
   })();
 
+  const topRightHealthText =
+    health?.ok ? "Connected" : health?.error ? "Offline" : "Checking…";
+
   return (
     <main className={classNames("min-h-screen", isDark ? "text-white" : "text-black")} style={{ background: pageBg }}>
       {/* Top */}
@@ -365,9 +398,10 @@ export default function ClientAnalyze() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Badge isDark={isDark} tone={health?.ok ? "good" : health?.error ? "bad" : "neutral"}>
-              {health?.ok ? "API OK" : health?.error ? "API ERROR" : "API…"}
-            </Badge>
+            {/* ✅ remove the green API badge vibe; keep it neutral */}
+            <span className={classNames("text-xs px-3 py-2 rounded-xl border", isDark ? "border-white/10 text-white/60" : "border-black/10 text-black/60")}>
+              {topRightHealthText}
+            </span>
 
             <button
               onClick={share}
@@ -519,6 +553,16 @@ export default function ClientAnalyze() {
             }
           />
           <CardBody>
+            {/* ✅ show errors clearly */}
+            {!loading && result?.error ? (
+              <div className={classNames("rounded-2xl border p-4 mb-4", isDark ? "border-rose-500/30 bg-rose-500/10" : "border-rose-500/30 bg-rose-500/10")}>
+                <div className="font-semibold">Request failed</div>
+                <div className={classNames("text-sm mt-1", isDark ? "text-white/80" : "text-black/80")}>
+                  {String(result?.error)} — {typeof result?.detail === "string" ? result.detail : JSON.stringify(result.detail ?? {}, null, 2)}
+                </div>
+              </div>
+            ) : null}
+
             {!loading && !result ? (
               <div className={classNames("rounded-2xl border p-8 text-center", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
                 <div className={classNames("mx-auto h-12 w-12 rounded-2xl border flex items-center justify-center text-lg", isDark ? "border-white/10 bg-white/5" : "border-black/10 bg-white")}>
@@ -548,7 +592,7 @@ export default function ClientAnalyze() {
               </div>
             ) : null}
 
-            {!loading && result ? (
+            {!loading && result && !result?.error ? (
               <>
                 <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
                   <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Decision summary</div>
@@ -596,7 +640,7 @@ export default function ClientAnalyze() {
                       </div>
                       <div>
                         <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Replacement cost risk</div>
-                        <div className="mt-1">{(result?.executive_summary?.replacement_cost_risk ?? scoreLabel) || "—"}</div>
+                        <div className="mt-1">{result?.executive_summary?.replacement_cost_risk ?? "—"}</div>
                       </div>
                     </div>
                     <div className="mt-4">
@@ -679,3 +723,4 @@ export default function ClientAnalyze() {
     </main>
   );
 }
+
