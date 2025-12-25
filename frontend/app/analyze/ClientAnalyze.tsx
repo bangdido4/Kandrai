@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 type AnalyzeResponse = any;
 
@@ -14,64 +14,33 @@ function safeJsonParse(text: string) {
     return { ok: false, data: { raw: text } };
   }
 }
-function clamp(n: number, a: number, b: number) {
-  return Math.max(a, Math.min(b, n));
-}
 
-function Badge({
-  children,
-  tone = "neutral",
-  className = "",
-  isDark,
-}: {
-  children: React.ReactNode;
-  tone?: "neutral" | "good" | "warn" | "bad" | "info";
-  className?: string;
-  isDark: boolean;
-}) {
-  const toneCls =
-    tone === "good"
+function Badge({ children, tone, isDark }: { children: React.ReactNode; tone?: "good" | "warn" | "bad" | "info" | "neutral"; isDark: boolean }) {
+  const t = tone ?? "neutral";
+  const cls =
+    t === "good"
       ? "bg-emerald-500/12 text-emerald-200 ring-emerald-500/20"
-      : tone === "warn"
+      : t === "warn"
       ? "bg-amber-500/12 text-amber-200 ring-amber-500/20"
-      : tone === "bad"
+      : t === "bad"
       ? "bg-rose-500/12 text-rose-200 ring-rose-500/20"
-      : tone === "info"
+      : t === "info"
       ? "bg-indigo-500/12 text-indigo-200 ring-indigo-500/20"
       : isDark
       ? "bg-white/6 text-white/70 ring-white/12"
       : "bg-black/[0.04] text-black/70 ring-black/10";
 
-  return (
-    <span
-      className={classNames(
-        "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 backdrop-blur",
-        toneCls,
-        className
-      )}
-    >
-      {children}
-    </span>
-  );
+  return <span className={classNames("inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1 backdrop-blur", cls)}>{children}</span>;
 }
 
-function Card({
-  children,
-  className = "",
-  isDark,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  isDark: boolean;
-}) {
+function Card({ children, isDark }: { children: React.ReactNode; isDark: boolean }) {
   return (
     <div
       className={classNames(
         "rounded-3xl border backdrop-blur",
         isDark
           ? "border-white/10 bg-white/[0.04] shadow-[0_1px_0_rgba(255,255,255,0.05),0_30px_80px_rgba(0,0,0,0.55)]"
-          : "border-black/10 bg-white/60 shadow-[0_1px_0_rgba(0,0,0,0.04),0_30px_80px_rgba(0,0,0,0.12)]",
-        className
+          : "border-black/10 bg-white/70 shadow-[0_1px_0_rgba(0,0,0,0.04),0_30px_80px_rgba(0,0,0,0.12)]"
       )}
     >
       {children}
@@ -79,29 +48,12 @@ function Card({
   );
 }
 
-function CardHeader({
-  title,
-  subtitle,
-  right,
-  isDark,
-}: {
-  title: string;
-  subtitle?: string;
-  right?: React.ReactNode;
-  isDark: boolean;
-}) {
+function CardHeader({ title, subtitle, right, isDark }: { title: string; subtitle?: string; right?: React.ReactNode; isDark: boolean }) {
   return (
-    <div
-      className={classNames(
-        "flex items-start justify-between gap-3 p-6 border-b",
-        isDark ? "border-white/10" : "border-black/10"
-      )}
-    >
+    <div className={classNames("flex items-start justify-between gap-3 p-6 border-b", isDark ? "border-white/10" : "border-black/10")}>
       <div className="min-w-0">
         <div className={classNames("font-semibold", isDark ? "text-white" : "text-black")}>{title}</div>
-        {subtitle ? (
-          <div className={classNames("text-sm mt-1", isDark ? "text-white/60" : "text-black/60")}>{subtitle}</div>
-        ) : null}
+        {subtitle ? <div className={classNames("text-sm mt-1", isDark ? "text-white/60" : "text-black/60")}>{subtitle}</div> : null}
       </div>
       {right ? <div className="shrink-0">{right}</div> : null}
     </div>
@@ -111,155 +63,84 @@ function CardBody({ children }: { children: React.ReactNode }) {
   return <div className="p-6">{children}</div>;
 }
 
-function ScoreMeter({ value, isDark }: { value: number; isDark: boolean }) {
-  const v = clamp(Number.isFinite(value) ? value : 0, 0, 100);
+function ScoreBar({ value, isDark }: { value: number; isDark: boolean }) {
+  const v = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
   return (
     <div className={classNames("h-2 w-full rounded-full overflow-hidden", isDark ? "bg-white/10" : "bg-black/10")}>
       <div
         className="h-full rounded-full"
         style={{
           width: `${v}%`,
-          background: "linear-gradient(90deg, rgba(99,102,241,0.98), rgba(236,72,153,0.55), rgba(255,255,255,0.18))",
+          background: "linear-gradient(90deg, rgba(255,255,255,0.85), rgba(99,102,241,0.95), rgba(236,72,153,0.55))",
         }}
       />
     </div>
   );
 }
 
-function List({ items, isDark }: { items: string[]; isDark: boolean }) {
-  if (!items?.length) return <div className={classNames("text-sm", isDark ? "text-white/40" : "text-black/40")}>—</div>;
-  return (
-    <ul className={classNames("space-y-2 text-sm", isDark ? "text-white/80" : "text-black/75")}>
-      {items.map((x, i) => (
-        <li key={i} className="flex gap-2">
-          <span className={classNames("", isDark ? "text-white/30" : "text-black/30")}>•</span>
-          <span>{x}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function LiveLine({ active, isDark }: { active: boolean; isDark: boolean }) {
-  const [points, setPoints] = useState<number[]>(() => Array.from({ length: 42 }, () => 0.5));
-  const timerRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (!active) return;
-    timerRef.current = setInterval(() => {
-      setPoints((prev) => {
-        const last = prev[prev.length - 1] ?? 0.5;
-        const next = clamp(last + (Math.random() - 0.5) * 0.18, 0.08, 0.92);
-        const shifted = prev.slice(1);
-        shifted.push(next);
-        return shifted;
-      });
-    }, 120);
-    return () => clearInterval(timerRef.current);
-  }, [active]);
-
-  const w = 520;
-  const h = 44;
-
-  const path = points
-    .map((p, i) => {
-      const x = (i / (points.length - 1)) * w;
-      const y = (1 - p) * h;
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
-
-  const stroke = isDark ? "rgba(99,102,241,0.95)" : "rgba(99,102,241,0.85)";
-  const glow = isDark ? "rgba(99,102,241,0.30)" : "rgba(99,102,241,0.18)";
-
-  return (
-    <div className={classNames("w-full overflow-hidden rounded-2xl border p-3", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10">
-        <path d={path} fill="none" stroke={stroke} strokeWidth="2" />
-        <path d={path} fill="none" stroke={glow} strokeWidth="6" opacity="0.7" />
-      </svg>
-      <div className={classNames("flex items-center justify-between text-[11px] mt-1", isDark ? "text-white/45" : "text-black/45")}>
-        <span>Live signal</span>
-        <span>{active ? "Active" : "Idle"}</span>
-      </div>
-    </div>
-  );
-}
-
-function Skeleton({ className = "", isDark }: { className?: string; isDark: boolean }) {
+function Skeleton({ isDark, className = "" }: { isDark: boolean; className?: string }) {
   return <div className={classNames("animate-pulse rounded-2xl", isDark ? "bg-white/10" : "bg-black/10", className)} />;
 }
 
-/** ---- File text extraction (PDF/DOCX/TXT) ---- */
-async function extractTextFromTxt(file: File) {
-  return await file.text();
+async function extractTxt(file: File) {
+  return (await file.text()).trim();
 }
-async function extractTextFromDocx(file: File) {
+
+async function extractDocx(file: File) {
   const mammoth = await import("mammoth");
   const arrayBuffer = await file.arrayBuffer();
   const res = await mammoth.extractRawText({ arrayBuffer });
-  return (res?.value ?? "").trim();
+  return String(res?.value ?? "").trim();
 }
-async function extractTextFromPdf(file: File) {
-  // Prevent SSR/bundler issues by only running in browser
-  if (typeof window === "undefined") throw new Error("PDF extraction only runs in browser.");
 
-  // DOMMatrix polyfill (browser only)
-  if (!(globalThis as any).DOMMatrix) {
-    const dm = await import("dommatrix");
-    (globalThis as any).DOMMatrix = (dm as any).DOMMatrix;
+async function extractPdfViaBackend(apiBase: string, file: File) {
+  const fd = new FormData();
+  fd.append("file", file);
+
+  const res = await fetch(`${apiBase}/extract`, { method: "POST", body: fd });
+  const text = await res.text();
+  const parsed = safeJsonParse(text);
+
+  if (!res.ok) {
+    const msg = parsed.data?.detail || parsed.data?.error || `Extract failed (${res.status})`;
+    throw new Error(String(msg));
   }
-
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
-
-  // Worker via CDN
-  // @ts-ignore
-  pdfjs.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
-
-  const data = new Uint8Array(await file.arrayBuffer());
-  // @ts-ignore
-  const pdf = await pdfjs.getDocument({ data }).promise;
-
-  let full = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const strings = (content.items as any[]).map((it) => (it?.str ? String(it.str) : ""));
-    full += strings.join(" ") + "\n";
-  }
-  return full.trim();
+  const out = parsed.data?.text;
+  if (!out || typeof out !== "string") throw new Error("Extract endpoint returned no text.");
+  return out.trim();
 }
-async function extractTextFromFile(file: File) {
+
+async function extractAny(apiBase: string, file: File) {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".txt")) return await extractTextFromTxt(file);
-  if (name.endsWith(".docx")) return await extractTextFromDocx(file);
-  if (name.endsWith(".pdf")) return await extractTextFromPdf(file);
+  if (name.endsWith(".txt")) return await extractTxt(file);
+  if (name.endsWith(".docx")) return await extractDocx(file);
+  if (name.endsWith(".pdf")) return await extractPdfViaBackend(apiBase, file);
   throw new Error("Unsupported file. Use PDF, DOCX or TXT.");
 }
 
 function DropZone({
-  label,
+  title,
   value,
   onText,
-  hint,
+  apiBase,
   isDark,
 }: {
-  label: string;
+  title: string;
   value: string;
-  onText: (text: string) => void;
-  hint?: string;
+  onText: (t: string) => void;
+  apiBase: string;
   isDark: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string>("");
+  const [err, setErr] = useState("");
 
-  async function handleFile(file: File) {
+  async function handle(file: File) {
     setErr("");
     setBusy(true);
     try {
-      const text = await extractTextFromFile(file);
-      if (!text || text.trim().length < 20) setErr("File loaded but text looks empty/too short.");
+      const text = await extractAny(apiBase, file);
       onText(text);
+      if (!text || text.length < 30) setErr("Extracted text is very short. Try another file or paste manually.");
     } catch (e: any) {
       setErr(String(e?.message || e));
     } finally {
@@ -270,8 +151,8 @@ function DropZone({
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <div className={classNames("text-sm", isDark ? "text-white/80" : "text-black/80")}>{label}</div>
-        <div className={classNames("text-xs", isDark ? "text-white/45" : "text-black/45")}>{busy ? "Extracting…" : hint ?? "PDF / DOCX / TXT"}</div>
+        <div className={classNames("text-sm font-medium", isDark ? "text-white/80" : "text-black/80")}>{title}</div>
+        <div className={classNames("text-xs", isDark ? "text-white/45" : "text-black/45")}>{busy ? "Extracting…" : "PDF/DOCX/TXT"}</div>
       </div>
 
       <div
@@ -283,7 +164,7 @@ function DropZone({
           e.preventDefault();
           e.stopPropagation();
           const f = e.dataTransfer.files?.[0];
-          if (f) await handleFile(f);
+          if (f) await handle(f);
         }}
         className={classNames(
           "rounded-2xl border p-4 transition",
@@ -304,16 +185,15 @@ function DropZone({
               accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
               onChange={async (e) => {
                 const f = e.target.files?.[0];
-                if (f) await handleFile(f);
+                if (f) await handle(f);
               }}
             />
           </label>
 
-          <div className={classNames("text-sm", isDark ? "text-white/60" : "text-black/60")}>Drag & drop your file here</div>
-          {busy ? <div className={classNames("ml-auto text-xs", isDark ? "text-white/50" : "text-black/50")}>Working…</div> : null}
+          <div className={classNames("text-sm", isDark ? "text-white/60" : "text-black/60")}>Drag & drop here</div>
         </div>
 
-        {err ? <div className="mt-3 text-xs text-rose-500">{err}</div> : null}
+        {err ? <div className="mt-3 text-xs text-rose-400">{err}</div> : null}
 
         <div className="mt-4">
           <textarea
@@ -342,38 +222,23 @@ export default function ClientAnalyze() {
   const api = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
   const [role, setRole] = useState<"candidate" | "recruiter">("recruiter");
-  const [candidateText, setCandidateText] = useState("");
-  const [jobDescription, setJobDescription] = useState("");
-  const [recruiterDoubt, setRecruiterDoubt] = useState("");
+  const [cvText, setCvText] = useState("");
+  const [jdText, setJdText] = useState("");
+  const [doubt, setDoubt] = useState("");
 
   const [health, setHealth] = useState<{ ok?: boolean; marker?: string; error?: string } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [rawText, setRawText] = useState<string>("");
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
-  const [tab, setTab] = useState<"overview" | "evidence" | "interview" | "json">("overview");
+  const [rawText, setRawText] = useState("");
+  const [tab, setTab] = useState<"overview" | "evidence" | "interview">("overview");
 
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [debug, setDebug] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    try {
-      const q = new URLSearchParams(window.location.search);
-      setDebug(q.get("debug") === "1");
-    } catch {}
-  }, []);
-
   useEffect(() => {
     try {
       const saved = localStorage.getItem("kandrai_theme");
       if (saved === "light" || saved === "dark") setTheme(saved);
-      else setTheme("dark");
-    } catch {
-      setTheme("dark");
-    }
+    } catch {}
   }, []);
-
   useEffect(() => {
     try {
       localStorage.setItem("kandrai_theme", theme);
@@ -381,21 +246,6 @@ export default function ClientAnalyze() {
   }, [theme]);
 
   const isDark = theme === "dark";
-
-  const score = useMemo(() => {
-    const p = result?.match_score?.percentage;
-    return typeof p === "number" ? p : null;
-  }, [result]);
-
-  const scoreLabel = result?.match_score?.label ?? "";
-  const verdict = result?.executive_summary?.one_line_verdict ?? "";
-  const brutal = result?.match_score?.brutal_honesty ?? "";
-  const confidence = result?.match_score?.confidence_index ?? null;
-  const confidenceExplain = result?.match_score?.confidence_explanation ?? "";
-  const marketContext = result?.match_score?.market_context ?? "";
-
-  const canRun = !!api && candidateText.trim().length > 0 && jobDescription.trim().length > 0 && !loading;
-  const tabs = debug ? (["overview", "evidence", "interview", "json"] as const) : (["overview", "evidence", "interview"] as const);
 
   useEffect(() => {
     if (!api) {
@@ -408,10 +258,7 @@ export default function ClientAnalyze() {
         const r = await fetch(`${api}/health`, { cache: "no-store" });
         const t = await r.text();
         const parsed = safeJsonParse(t);
-        if (!cancelled) {
-          if (!r.ok) setHealth({ error: `Health check failed (${r.status})`, ...parsed.data });
-          else setHealth(parsed.data);
-        }
+        if (!cancelled) setHealth(r.ok ? parsed.data : { error: `Health failed (${r.status})`, ...parsed.data });
       } catch (e: any) {
         if (!cancelled) setHealth({ error: String(e?.message || e) });
       }
@@ -420,6 +267,17 @@ export default function ClientAnalyze() {
       cancelled = true;
     };
   }, [api]);
+
+  const score = useMemo(() => {
+    const p = result?.match_score?.percentage;
+    return typeof p === "number" ? p : null;
+  }, [result]);
+
+  const scoreLabel = result?.match_score?.label ?? "";
+  const verdict = result?.executive_summary?.one_line_verdict ?? "";
+  const brutal = result?.match_score?.brutal_honesty ?? "";
+
+  const canRun = !!api && cvText.trim().length > 0 && jdText.trim().length > 0 && !loading;
 
   async function runAnalyze() {
     if (!api) return;
@@ -430,9 +288,9 @@ export default function ClientAnalyze() {
     try {
       const payload = {
         role,
-        job_description: jobDescription,
-        candidate_text: candidateText,
-        recruiter_doubt: role === "recruiter" ? recruiterDoubt : "",
+        job_description: jdText,
+        candidate_text: cvText,
+        recruiter_doubt: role === "recruiter" ? doubt : "",
       };
 
       const res = await fetch(`${api}/analyze`, {
@@ -443,37 +301,31 @@ export default function ClientAnalyze() {
 
       const text = await res.text();
       setRawText(text);
-
       const parsed = safeJsonParse(text);
+
       if (!res.ok) {
         setResult({ error: res.status, ...parsed.data });
-        setTab("json");
+        setTab("overview");
         return;
       }
 
       setResult(parsed.data);
       setTab("overview");
-    } catch (err: any) {
-      setResult({ error: String(err?.message || err) });
-      setRawText(JSON.stringify({ error: String(err?.message || err) }, null, 2));
-      setTab("json");
+    } catch (e: any) {
+      setResult({ error: String(e?.message || e) });
+      setRawText(JSON.stringify({ error: String(e?.message || e) }, null, 2));
     } finally {
       setLoading(false);
     }
   }
 
-  function copy(text: string) {
-    navigator.clipboard?.writeText(text).catch(() => {});
-  }
-
   async function share() {
-    const url = typeof window !== "undefined" ? window.location.href : "";
-    const title = "Kandrai — Recruitment Intelligence";
+    const url = window.location.href;
     try {
       // @ts-ignore
       if (navigator.share) {
         // @ts-ignore
-        await navigator.share({ title, text: "Kandrai analysis", url });
+        await navigator.share({ title: "Kandrai", text: "Recruitment Intelligence", url });
         return;
       }
     } catch {}
@@ -485,62 +337,38 @@ export default function ClientAnalyze() {
     }
   }
 
-  const copyLabels =
-    role === "candidate"
-      ? {
-          heroSubA: "Upload or paste a CV and Job Description.",
-          heroSubB: "Get verdict, evidence and interview guidance instantly.",
-          resultsSubtitle: "Prep-ready output.",
-          timingLabel: "Timing",
-          riskLabel: "Risk level",
-          actionLabel: "Next best action",
-          questionsLabel: "Questions you will likely get",
-          redFlagsLabel: "What may worry recruiters",
-          workSampleLabel: "What they may ask you to do",
-          emptyTitle: "Your results will appear here.",
-          emptySub: "Upload files or paste text, then run analysis.",
-        }
-      : {
-          heroSubA: "Upload or paste a CV and Job Description.",
-          heroSubB: "Get verdict, evidence and interview guidance instantly.",
-          resultsSubtitle: "Decision-ready output.",
-          timingLabel: "Hire now vs later",
-          riskLabel: "Replacement cost risk",
-          actionLabel: "Executive action",
-          questionsLabel: "Top questions",
-          redFlagsLabel: "Red flags to verify",
-          workSampleLabel: "Work sample test",
-          emptyTitle: "Run analysis to generate the decision packet.",
-          emptySub: "Upload the CV + JD, add doubt (optional), then run.",
-        };
+  const pageBg = isDark
+    ? "radial-gradient(900px 520px at 50% 0%, rgba(99,102,241,0.18), transparent 62%), radial-gradient(900px 600px at 100% 35%, rgba(14,165,233,0.08), transparent 62%), linear-gradient(180deg, #070A12 0%, #070A12 35%, #050711 100%)"
+    : "radial-gradient(900px 520px at 50% 0%, rgba(99,102,241,0.16), transparent 60%), radial-gradient(900px 600px at 100% 40%, rgba(14,165,233,0.08), transparent 58%), linear-gradient(180deg, #F7F8FF 0%, #EEF2FF 50%, #F3E8FF 100%)";
 
-  const decisionTag = useMemo(() => {
+  const decision = (() => {
     const s = score ?? 0;
     if (s >= 85) return { t: "Strong hire", tone: "good" as const };
     if (s >= 70) return { t: "Hire", tone: "info" as const };
     if (s >= 55) return { t: "Borderline", tone: "warn" as const };
     return { t: "No-hire", tone: "bad" as const };
-  }, [score]);
-
-  const pageBg = isDark
-    ? "radial-gradient(900px 520px at 50% 0%, rgba(99,102,241,0.18), transparent 62%), radial-gradient(900px 600px at 100% 35%, rgba(14,165,233,0.08), transparent 62%), linear-gradient(180deg, #070A12 0%, #070A12 35%, #050711 100%)"
-    : "radial-gradient(900px 520px at 50% 0%, rgba(99,102,241,0.16), transparent 60%), radial-gradient(900px 600px at 100% 40%, rgba(14,165,233,0.08), transparent 58%), linear-gradient(180deg, #F7F8FF 0%, #EEF2FF 50%, #F3E8FF 100%)";
+  })();
 
   return (
     <main className={classNames("min-h-screen", isDark ? "text-white" : "text-black")} style={{ background: pageBg }}>
+      {/* Top */}
       <div className={classNames("sticky top-0 z-20 border-b backdrop-blur", isDark ? "border-white/10 bg-[#070A12]/70" : "border-black/10 bg-white/70")}>
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={classNames("h-9 w-9 rounded-xl border flex items-center justify-center font-semibold", isDark ? "border-white/10 bg-white/5 text-white" : "border-black/10 bg-white text-black")}>
+            <div className={classNames("h-9 w-9 rounded-xl border flex items-center justify-center font-semibold", isDark ? "border-white/10 bg-white/5" : "border-black/10 bg-white")}>
               K
             </div>
             <div>
-              <div className={classNames("font-semibold leading-tight", isDark ? "text-white" : "text-black")}>Kandrai</div>
+              <div className="font-semibold leading-tight">Kandrai</div>
               <div className={classNames("text-xs leading-tight", isDark ? "text-white/60" : "text-black/60")}>Recruitment Intelligence</div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <Badge isDark={isDark} tone={health?.ok ? "good" : health?.error ? "bad" : "neutral"}>
+              {health?.ok ? "API OK" : health?.error ? "API ERROR" : "API…"}
+            </Badge>
+
             <button
               onClick={share}
               className={classNames("px-3 py-2 rounded-xl border text-sm transition", isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-white hover:bg-black/5")}
@@ -551,33 +379,31 @@ export default function ClientAnalyze() {
             <button
               onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
               className={classNames("px-3 py-2 rounded-xl border text-sm transition", isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-white hover:bg-black/5")}
+              title="Toggle theme"
             >
               {isDark ? "🌞" : "🌙"}
             </button>
-
-            <Badge isDark={isDark} tone="info">{role === "recruiter" ? "Recruiter mode" : "Candidate mode"}</Badge>
           </div>
         </div>
       </div>
 
-      <div className={classNames("mx-auto max-w-4xl px-4 pt-14 pb-10 text-center transition-all duration-700", mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")}>
+      {/* Hero */}
+      <div className="mx-auto max-w-4xl px-4 pt-14 pb-10 text-center">
         <div className="flex flex-wrap justify-center items-center gap-2 mb-4">
           <Badge isDark={isDark} tone="info">Explainable AI</Badge>
           <Badge isDark={isDark} tone="neutral">Evidence-backed</Badge>
-          <Badge isDark={isDark} tone="neutral">Decision trace</Badge>
           <Badge isDark={isDark} tone="neutral">Interview plan</Badge>
         </div>
 
-        <h1 className={classNames("text-3xl md:text-5xl font-semibold tracking-tight", isDark ? "text-white" : "text-black")}>
-          Recruitment{" "}
-          <span className={classNames("font-semibold", isDark ? "text-indigo-300" : "text-indigo-600")}>intelligence</span>,{" "}
+        <h1 className="text-3xl md:text-5xl font-semibold tracking-tight">
+          Recruitment <span className={classNames(isDark ? "text-indigo-300" : "text-indigo-700")}>intelligence</span>,{" "}
           <span className={classNames(isDark ? "text-white/75" : "text-black/75")}>built for real hiring decisions.</span>
         </h1>
 
         <p className={classNames("max-w-2xl mx-auto mt-4 text-base md:text-lg", isDark ? "text-white/60" : "text-black/60")}>
-          {copyLabels.heroSubA}
+          Upload or paste a CV and Job Description.
           <br />
-          {copyLabels.heroSubB}
+          Get verdict, evidence and interview guidance instantly.
         </p>
 
         <div className="mt-7 flex items-center justify-center gap-2">
@@ -614,36 +440,31 @@ export default function ClientAnalyze() {
         </div>
       </div>
 
-      <div className={classNames("mx-auto max-w-6xl px-4 pb-16 grid grid-cols-1 gap-6 transition-all duration-700", mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")}>
+      {/* Content */}
+      <div className="mx-auto max-w-6xl px-4 pb-16 grid grid-cols-1 gap-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card isDark={isDark}>
-            <CardHeader isDark={isDark} title={role === "recruiter" ? "CV (candidate)" : "Your CV"} subtitle="Upload (PDF/DOCX/TXT) or paste." />
+            <CardHeader isDark={isDark} title="CV" subtitle="Upload PDF/DOCX/TXT or paste." />
             <CardBody>
-              <DropZone isDark={isDark} label="CV file" value={candidateText} onText={setCandidateText} hint="PDF / DOCX / TXT" />
+              <DropZone title="Candidate CV" value={cvText} onText={setCvText} apiBase={api} isDark={isDark} />
             </CardBody>
           </Card>
 
           <Card isDark={isDark}>
-            <CardHeader isDark={isDark} title="Job Description" subtitle="Upload (PDF/DOCX/TXT) or paste." />
+            <CardHeader isDark={isDark} title="Job Description" subtitle="Upload PDF/DOCX/TXT or paste." />
             <CardBody>
-              <DropZone isDark={isDark} label="Job description file" value={jobDescription} onText={setJobDescription} hint="PDF / DOCX / TXT" />
+              <DropZone title="Job description" value={jdText} onText={setJdText} apiBase={api} isDark={isDark} />
 
               {role === "recruiter" ? (
                 <div className="mt-4">
                   <div className={classNames("text-sm mb-2", isDark ? "text-white/70" : "text-black/70")}>Recruiter doubt (optional)</div>
                   <input
-                    value={recruiterDoubt}
-                    onChange={(e) => setRecruiterDoubt(e.target.value)}
+                    value={doubt}
+                    onChange={(e) => setDoubt(e.target.value)}
                     placeholder="e.g. Reliability, English level, job hopping…"
-                    spellCheck={false}
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    data-gramm="false"
                     className={classNames(
                       "w-full rounded-2xl border px-4 py-3 text-sm outline-none focus:ring-2",
-                      isDark
-                        ? "border-white/10 bg-black/30 text-white placeholder:text-white/40 focus:ring-indigo-500/40"
-                        : "border-black/10 bg-white text-black placeholder:text-black/40 focus:ring-indigo-600/25"
+                      isDark ? "border-white/10 bg-black/30 text-white placeholder:text-white/40 focus:ring-indigo-500/40" : "border-black/10 bg-white text-black placeholder:text-black/40 focus:ring-indigo-600/25"
                     )}
                   />
                 </div>
@@ -665,33 +486,33 @@ export default function ClientAnalyze() {
                   {loading ? "Analyzing…" : "Run analysis"}
                 </button>
 
-                {debug ? (
-                  <button
-                    onClick={() => copy(rawText || JSON.stringify(result ?? {}, null, 2))}
-                    className={classNames(
-                      "ml-auto px-4 py-3 rounded-2xl text-sm border transition",
-                      isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-white hover:bg-black/5"
-                    )}
-                  >
-                    Copy JSON
-                  </button>
-                ) : null}
+                <button
+                  onClick={() => {
+                    setCvText("");
+                    setJdText("");
+                    setDoubt("");
+                    setResult(null);
+                    setRawText("");
+                  }}
+                  className={classNames("px-4 py-3 rounded-2xl text-sm border transition", isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-white hover:bg-black/5")}
+                >
+                  Clear
+                </button>
               </div>
             </CardBody>
           </Card>
         </div>
 
-        <Card isDark={isDark} className={isDark ? "shadow-[0_20px_80px_rgba(0,0,0,0.65)]" : ""}>
+        <Card isDark={isDark}>
           <CardHeader
             isDark={isDark}
             title="Results"
-            subtitle={copyLabels.resultsSubtitle}
+            subtitle="Decision-ready output."
             right={
               score !== null ? (
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white bg-indigo-600">
-                    {score}%
-                  </span>
+                  <Badge isDark={isDark} tone={decision.tone}>{decision.t}</Badge>
+                  <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold text-white bg-indigo-600">{score}%</span>
                   {scoreLabel ? <Badge isDark={isDark} tone="neutral">{scoreLabel}</Badge> : null}
                 </div>
               ) : null
@@ -703,8 +524,8 @@ export default function ClientAnalyze() {
                 <div className={classNames("mx-auto h-12 w-12 rounded-2xl border flex items-center justify-center text-lg", isDark ? "border-white/10 bg-white/5" : "border-black/10 bg-white")}>
                   ✦
                 </div>
-                <div className={classNames("mt-4 text-lg font-semibold", isDark ? "text-white" : "text-black")}>{copyLabels.emptyTitle}</div>
-                <div className={classNames("mt-2 text-sm", isDark ? "text-white/60" : "text-black/60")}>{copyLabels.emptySub}</div>
+                <div className="mt-4 text-lg font-semibold">Your results will appear here.</div>
+                <div className={classNames("mt-2 text-sm", isDark ? "text-white/60" : "text-black/60")}>Upload PDF/DOCX/TXT or paste text, then run.</div>
               </div>
             ) : null}
 
@@ -713,7 +534,7 @@ export default function ClientAnalyze() {
                 <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
                   <div className="flex flex-col md:flex-row gap-5 md:items-start md:justify-between">
                     <div className="flex-1 min-w-0">
-                      <Skeleton isDark={isDark} className="h-6 w-40" />
+                      <Skeleton isDark={isDark} className="h-6 w-44" />
                       <Skeleton isDark={isDark} className="h-5 w-[90%] mt-3" />
                       <Skeleton isDark={isDark} className="h-5 w-[70%] mt-2" />
                     </div>
@@ -724,68 +545,29 @@ export default function ClientAnalyze() {
                     </div>
                   </div>
                 </div>
-                <Skeleton isDark={isDark} className="h-16" />
-                <div className={classNames("grid md:grid-cols-2 gap-4")}>
-                  <Skeleton isDark={isDark} className="h-28" />
-                  <Skeleton isDark={isDark} className="h-28" />
-                </div>
               </div>
             ) : null}
 
             {!loading && result ? (
               <>
-                <div className="mb-5">
-                  <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
-                    <div className="flex flex-col md:flex-row gap-5 md:items-start md:justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <Badge isDark={isDark} tone={decisionTag.tone}>{decisionTag.t}</Badge>
-                          {confidence !== null ? (
-                            <Badge isDark={isDark} tone="info">Confidence {Math.round((Number(confidence) || 0) * 100)}%</Badge>
-                          ) : null}
-                        </div>
+                <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
+                  <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Decision summary</div>
+                  <div className="mt-1 text-base font-semibold leading-snug break-words">{verdict || "—"}</div>
 
-                        <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Decision summary</div>
-                        <div className={classNames("mt-1 text-base font-semibold leading-snug break-words", isDark ? "text-white" : "text-black")}>
-                          {verdict || "—"}
-                        </div>
-
-                        {brutal ? (
-                          <div className={classNames("mt-3 text-sm leading-relaxed", isDark ? "text-white/75" : "text-black/75")}>
-                            <span className={classNames("", isDark ? "text-white/50" : "text-black/50")}>Brutal honesty:</span> {brutal}
-                          </div>
-                        ) : null}
-
-                        {confidenceExplain ? (
-                          <div className={classNames("mt-3 text-sm leading-relaxed", isDark ? "text-white/65" : "text-black/65")}>
-                            <span className={classNames("", isDark ? "text-white/50" : "text-black/50")}>Why confidence:</span> {confidenceExplain}
-                          </div>
-                        ) : null}
-
-                        {marketContext ? (
-                          <div className={classNames("mt-3 text-sm leading-relaxed", isDark ? "text-white/65" : "text-black/65")}>
-                            <span className={classNames("", isDark ? "text-white/50" : "text-black/50")}>Market context:</span> {marketContext}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="flex-none w-full md:w-80">
-                        <div className={classNames("text-xs mb-2", isDark ? "text-white/50" : "text-black/50")}>Overall match</div>
-                        <ScoreMeter isDark={isDark} value={score ?? 0} />
-                        <div className={classNames("mt-3 text-xs", isDark ? "text-white/45" : "text-black/45")}>
-                          VC-style: score + confidence + blockers.
-                        </div>
-                      </div>
+                  {brutal ? (
+                    <div className={classNames("mt-3 text-sm leading-relaxed", isDark ? "text-white/75" : "text-black/75")}>
+                      <span className={classNames("", isDark ? "text-white/50" : "text-black/50")}>Brutal honesty:</span> {brutal}
                     </div>
+                  ) : null}
+
+                  <div className="mt-4">
+                    <div className={classNames("text-xs mb-2", isDark ? "text-white/50" : "text-black/50")}>Overall match</div>
+                    <ScoreBar isDark={isDark} value={score ?? 0} />
                   </div>
                 </div>
 
-                <div className="mb-5">
-                  <LiveLine isDark={isDark} active={true} />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 mb-5">
-                  {tabs.map((t) => (
+                <div className="flex flex-wrap items-center gap-2 my-5">
+                  {(["overview", "evidence", "interview"] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => setTab(t)}
@@ -803,31 +585,23 @@ export default function ClientAnalyze() {
                       {t}
                     </button>
                   ))}
-                  <div className="ml-auto">
-                    <Badge isDark={isDark} tone="info">{role === "recruiter" ? "Recruiter view" : "Candidate view"}</Badge>
-                  </div>
                 </div>
 
                 {tab === "overview" ? (
-                  <div className="grid gap-4">
-                    <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>{copyLabels.timingLabel}</div>
-                          <div className={classNames("mt-1", isDark ? "text-white" : "text-black")}>{result?.executive_summary?.hire_now_vs_later ?? "—"}</div>
-                        </div>
-                        <div>
-                          <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>{copyLabels.riskLabel}</div>
-                          <div className={classNames("mt-1", isDark ? "text-white" : "text-black")}>
-                            {(result?.executive_summary?.replacement_cost_risk ?? scoreLabel) || "—"}
-                          </div>
-                        </div>
+                  <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Hire now vs later</div>
+                        <div className="mt-1">{result?.executive_summary?.hire_now_vs_later ?? "—"}</div>
                       </div>
-
-                      <div className="mt-4">
-                        <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>{copyLabels.actionLabel}</div>
-                        <div className={classNames("mt-1", isDark ? "text-white" : "text-black")}>{result?.executive_summary?.executive_action ?? "—"}</div>
+                      <div>
+                        <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Replacement cost risk</div>
+                        <div className="mt-1">{(result?.executive_summary?.replacement_cost_risk ?? scoreLabel) || "—"}</div>
                       </div>
+                    </div>
+                    <div className="mt-4">
+                      <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Executive action</div>
+                      <div className="mt-1">{result?.executive_summary?.executive_action ?? "—"}</div>
                     </div>
                   </div>
                 ) : null}
@@ -836,17 +610,27 @@ export default function ClientAnalyze() {
                   <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
-                        <div className={classNames("text-sm font-semibold mb-2", isDark ? "text-white" : "text-black")}>CV signals</div>
-                        <List isDark={isDark} items={result?.evidence?.cv_signals ?? []} />
+                        <div className="text-sm font-semibold mb-2">CV signals</div>
+                        <ul className={classNames("space-y-2 text-sm", isDark ? "text-white/80" : "text-black/75")}>
+                          {(result?.evidence?.cv_signals ?? []).map((x: string, i: number) => (
+                            <li key={i} className="flex gap-2"><span className={classNames(isDark ? "text-white/30" : "text-black/30")}>•</span><span>{x}</span></li>
+                          ))}
+                          {!((result?.evidence?.cv_signals ?? []).length) ? <li className={classNames(isDark ? "text-white/40" : "text-black/40")}>—</li> : null}
+                        </ul>
                       </div>
                       <div>
-                        <div className={classNames("text-sm font-semibold mb-2", isDark ? "text-white" : "text-black")}>JD signals</div>
-                        <List isDark={isDark} items={result?.evidence?.jd_signals ?? []} />
+                        <div className="text-sm font-semibold mb-2">JD signals</div>
+                        <ul className={classNames("space-y-2 text-sm", isDark ? "text-white/80" : "text-black/75")}>
+                          {(result?.evidence?.jd_signals ?? []).map((x: string, i: number) => (
+                            <li key={i} className="flex gap-2"><span className={classNames(isDark ? "text-white/30" : "text-black/30")}>•</span><span>{x}</span></li>
+                          ))}
+                          {!((result?.evidence?.jd_signals ?? []).length) ? <li className={classNames(isDark ? "text-white/40" : "text-black/40")}>—</li> : null}
+                        </ul>
                       </div>
                     </div>
 
                     <div className="mt-6">
-                      <div className={classNames("text-sm font-semibold mb-2", isDark ? "text-white" : "text-black")}>Key mismatches</div>
+                      <div className="text-sm font-semibold mb-2">Key mismatches</div>
                       <div className="flex flex-wrap gap-2">
                         {(result?.evidence?.key_mismatches ?? []).map((x: string, i: number) => (
                           <Badge key={i} isDark={isDark} tone="bad">{x}</Badge>
@@ -861,12 +645,17 @@ export default function ClientAnalyze() {
                   <div className={classNames("rounded-2xl border p-5", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
-                        <div className={classNames("text-sm font-semibold mb-2", isDark ? "text-white" : "text-black")}>{copyLabels.questionsLabel}</div>
-                        <List isDark={isDark} items={result?.interview_plan?.top_7_questions ?? []} />
+                        <div className="text-sm font-semibold mb-2">Top questions</div>
+                        <ul className={classNames("space-y-2 text-sm", isDark ? "text-white/80" : "text-black/75")}>
+                          {(result?.interview_plan?.top_7_questions ?? []).map((x: string, i: number) => (
+                            <li key={i} className="flex gap-2"><span className={classNames(isDark ? "text-white/30" : "text-black/30")}>•</span><span>{x}</span></li>
+                          ))}
+                          {!((result?.interview_plan?.top_7_questions ?? []).length) ? <li className={classNames(isDark ? "text-white/40" : "text-black/40")}>—</li> : null}
+                        </ul>
                       </div>
 
                       <div>
-                        <div className={classNames("text-sm font-semibold mb-2", isDark ? "text-white" : "text-black")}>{copyLabels.redFlagsLabel}</div>
+                        <div className="text-sm font-semibold mb-2">Red flags to verify</div>
                         <div className="flex flex-wrap gap-2">
                           {(result?.interview_plan?.red_flags_to_verify ?? []).map((x: string, i: number) => (
                             <Badge key={i} isDark={isDark} tone="info">{x}</Badge>
@@ -875,46 +664,17 @@ export default function ClientAnalyze() {
                         </div>
 
                         <div className="mt-5">
-                          <div className={classNames("text-sm font-semibold mb-2", isDark ? "text-white" : "text-black")}>{copyLabels.workSampleLabel}</div>
-                          <div className={classNames("text-sm", isDark ? "text-white/75" : "text-black/75")}>
-                            {result?.interview_plan?.work_sample_test ?? "—"}
-                          </div>
+                          <div className="text-sm font-semibold mb-2">Work sample test</div>
+                          <div className={classNames("text-sm", isDark ? "text-white/75" : "text-black/75")}>{result?.interview_plan?.work_sample_test ?? "—"}</div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
-
-                {tab === "json" ? (
-                  <div className={classNames("rounded-2xl border p-4", isDark ? "border-white/10 bg-white/[0.03]" : "border-black/10 bg-white/70")}>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className={classNames("text-xs", isDark ? "text-white/50" : "text-black/50")}>Raw response</div>
-                      <button
-                        onClick={() => copy(rawText)}
-                        className={classNames("px-3 py-2 rounded-xl border text-sm transition", isDark ? "border-white/10 bg-white/5 hover:bg-white/10" : "border-black/10 bg-white hover:bg-black/5")}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                    <pre className={classNames("text-xs whitespace-pre-wrap break-words leading-relaxed", isDark ? "text-white/80" : "text-black/80")}>
-                      {rawText ? rawText : JSON.stringify(result, null, 2)}
-                    </pre>
                   </div>
                 ) : null}
               </>
             ) : null}
           </CardBody>
         </Card>
-
-        <div className={classNames("text-center text-xs mt-2", isDark ? "text-white/40" : "text-black/45")}>
-          {debug ? (
-            <>
-              Debug enabled. Add <span className="font-mono">?debug=1</span> to see JSON.
-            </>
-          ) : (
-            <>Kandrai — recruitment intelligence for high-stakes hiring</>
-          )}
-        </div>
       </div>
     </main>
   );
